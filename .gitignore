@@ -1,0 +1,13 @@
+.venv/
+.ultralytics/
+.vscode/
+__pycache__/
+*.py[cod]
+
+damage_artifacts/
+output/
+output_check/
+test_images/
+*.zip
+
+app.py
