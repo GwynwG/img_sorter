@@ -6,6 +6,7 @@ import os
 import shutil
 from pathlib import Path
 
+from .archive import archive_directory, archive_json
 from .config import (
     DEFAULT_BATCH,
     DEFAULT_DEVICE,
@@ -129,10 +130,15 @@ def train_one(
         "batch": str(batch),
         "device": device,
     }
-    (artifact_dir / "train_summary.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    summary_path = artifact_dir / "train_summary.json"
+    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    archived_run_dir = archive_directory(save_dir, "runs", model_name)
+    archived_model_dir = archive_directory(artifact_dir, "models", model_name)
+    summary["archived_run_dir"] = str(archived_run_dir)
+    summary["archived_model_dir"] = str(archived_model_dir)
+    summary["archived_summary_path"] = str(archive_json(summary, "summaries", f"{model_name}_train_summary"))
+    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     return summary
 
 
