@@ -5,6 +5,7 @@ import csv
 import json
 from pathlib import Path
 
+from .archive import archive_json
 from .config import METADATA_DIR, SEVERITY_BINS, default_model_paths
 from .inference import DamagePredictionPipeline
 
@@ -65,6 +66,15 @@ def main() -> None:
         device=args.device,
     )
     metrics = evaluate_pipeline(Path(args.metadata), pipeline)
+    metrics["metadata_csv"] = args.metadata
+    metrics["cascade_model"] = args.cascade_model
+    metrics["stage1_model"] = args.stage1_model
+    metrics["stage2_model"] = args.stage2_model
+
+    latest_path = METADATA_DIR / "evaluation_latest.json"
+    latest_path.write_text(json.dumps(metrics, ensure_ascii=False, indent=2), encoding="utf-8")
+    metrics["archived_evaluation_path"] = str(archive_json(metrics, "evaluations", "evaluation"))
+    latest_path.write_text(json.dumps(metrics, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(metrics, ensure_ascii=False, indent=2))
 
 

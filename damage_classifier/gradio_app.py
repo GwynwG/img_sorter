@@ -9,11 +9,53 @@ from .config import default_model_paths
 from .inference import DamagePredictionPipeline
 
 
+def _select_model_path(selected_path: str | None, default_path: Path) -> Path:
+    return Path(selected_path) if selected_path else default_path
+
+
 def build_demo(pipeline: DamagePredictionPipeline) -> gr.Blocks:
-    def predict(image_path: str):
+    default_paths = {
+        "cascade_level": pipeline.cascade_model_path,
+        "severity_stage1": pipeline.stage1_model_path,
+        "severity_stage2": pipeline.stage2_model_path,
+    }
+    pipeline_cache: dict[tuple[str, str, str, str], DamagePredictionPipeline] = {}
+
+    def get_pipeline(
+        cascade_model_path: str | None,
+        stage1_model_path: str | None,
+        stage2_model_path: str | None,
+    ) -> DamagePredictionPipeline:
+        cascade_path = _select_model_path(cascade_model_path, default_paths["cascade_level"])
+        stage1_path = _select_model_path(stage1_model_path, default_paths["severity_stage1"])
+        stage2_path = _select_model_path(stage2_model_path, default_paths["severity_stage2"])
+        cache_key = (
+            str(cascade_path.resolve()),
+            str(stage1_path.resolve()),
+            str(stage2_path.resolve()),
+            pipeline.device,
+        )
+        if cache_key not in pipeline_cache:
+            pipeline_cache[cache_key] = DamagePredictionPipeline(
+                cascade_model_path=cascade_path,
+                stage1_model_path=stage1_path,
+                stage2_model_path=stage2_path,
+                crop_size=pipeline.crop_size,
+                image_size=pipeline.image_size,
+                device=pipeline.device,
+            )
+        return pipeline_cache[cache_key]
+
+    def predict(
+        image_path: str,
+        cascade_model_path: str | None,
+        stage1_model_path: str | None,
+        stage2_model_path: str | None,
+    ):
         if not image_path:
             raise gr.Error("请先上传一张损伤光斑图")
-        prediction = pipeline.predict(Path(image_path))
+        active_pipeline = get_pipeline(cascade_model_path, stage1_model_path, stage2_model_path)
+        prediction = active_pipeline.predict(Path(image_path))
         return (
             prediction.cascade_level,
             f"{prediction.cascade_confidence:.4f}",
@@ -29,6 +71,11 @@ def build_demo(pipeline: DamagePredictionPipeline) -> gr.Blocks:
             上传一张损伤光斑图，系统会先判断损伤位于第一级还是第二级，再给出 4 档粗略损伤程度。
             """
         )
+        with gr.Accordion("模型选择（不选择则使用默认最新模型）", open=False):
+            with gr.Row():
+                cascade_model = gr.File(label="级联位置模型 best.pt", file_types=[".pt"], type="filepath")
+                stage1_model = gr.File(label="第一级程度模型 best.pt", file_types=[".pt"], type="filepath")
+                stage2_model = gr.File(label="第二级程度模型 best.pt", file_types=[".pt"], type="filepath")
         with gr.Row():
             image_input = gr.Image(type="filepath", label="上传损伤光斑图")
             with gr.Column():
@@ -40,7 +87,7 @@ def build_demo(pipeline: DamagePredictionPipeline) -> gr.Blocks:
         submit = gr.Button("开始识别", variant="primary")
         submit.click(
             fn=predict,
-            inputs=[image_input],
+            inputs=[image_input, cascade_model, stage1_model, stage2_model],
             outputs=[cascade_level, cascade_conf, severity_bin, severity_conf, severity_text],
         )
     return demo
@@ -67,7 +114,7 @@ def main() -> None:
         device=args.device,
     )
     demo = build_demo(pipeline)
-    demo.launch(server_name=args.host, server_port=args.port, show_api=False)
+    demo.launch(server_name=args.host, server_port=args.port)
 
 
 if __name__ == "__main__":
