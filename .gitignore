@@ -2,14 +2,22 @@
 .ultralytics/
 .vscode/
 __pycache__/
+<<<<<<< HEAD
 *.pyc
+=======
+*.py[cod]
+>>>>>>> 6ed2eb1deaef4a6128758f9b78052bf38af78ac2
 
 damage_artifacts/
 output/
 output_check/
 test_images/
+<<<<<<< HEAD
 
 模拟图/
 模拟图.zip
+=======
+*.zip
+>>>>>>> 6ed2eb1deaef4a6128758f9b78052bf38af78ac2
 
 app.py

@@ -1,9 +1,14 @@
+<<<<<<< HEAD
 ﻿from __future__ import annotations
+=======
+from __future__ import annotations
+>>>>>>> 6ed2eb1deaef4a6128758f9b78052bf38af78ac2
 
 import argparse
 from pathlib import Path
 
 import gradio as gr
+<<<<<<< HEAD
 from PIL import Image, ImageDraw, ImageFont
 
 from .config import SEVERITY_BINS, default_model_paths
@@ -170,10 +175,18 @@ STAGE_COLORS = {
 }
 
 
+=======
+
+from .config import default_model_paths
+from .inference import DamagePredictionPipeline
+
+
+>>>>>>> 6ed2eb1deaef4a6128758f9b78052bf38af78ac2
 def _select_model_path(selected_path: str | None, default_path: Path) -> Path:
     return Path(selected_path) if selected_path else default_path
 
 
+<<<<<<< HEAD
 def _severity_sequence_position(severity_bin: str) -> dict[str, float | int | str]:
     if severity_bin not in SEVERITY_BINS:
         raise KeyError(f"Unknown severity bin: {severity_bin}")
@@ -297,6 +310,8 @@ def _build_severity_visual(severity_bin: str, cascade_level: str, confidence: fl
     return image
 
 
+=======
+>>>>>>> 6ed2eb1deaef4a6128758f9b78052bf38af78ac2
 def build_demo(pipeline: DamagePredictionPipeline) -> gr.Blocks:
     default_paths = {
         "cascade_level": pipeline.cascade_model_path,
@@ -346,6 +361,7 @@ def build_demo(pipeline: DamagePredictionPipeline) -> gr.Blocks:
             prediction.severity_bin,
             f"{prediction.severity_confidence:.4f}",
             prediction.severity_range_text,
+<<<<<<< HEAD
             _build_severity_visual(
                 prediction.severity_bin,
                 prediction.cascade_level,
@@ -408,6 +424,36 @@ def build_demo(pipeline: DamagePredictionPipeline) -> gr.Blocks:
                 inputs=[image_input, cascade_model, stage1_model, stage2_model],
                 outputs=[cascade_level, cascade_conf, severity_bin, severity_conf, severity_text, stage_visual],
             )
+=======
+        )
+
+    with gr.Blocks(title="模拟损伤光斑图分级识别") as demo:
+        gr.Markdown(
+            """
+            # 模拟损伤光斑图分级识别
+            上传一张损伤光斑图，系统会先判断损伤位于第一级还是第二级，再给出 4 档粗略损伤程度。
+            """
+        )
+        with gr.Accordion("模型选择（不选择则使用默认最新模型）", open=False):
+            with gr.Row():
+                cascade_model = gr.File(label="级联位置模型 best.pt", file_types=[".pt"], type="filepath")
+                stage1_model = gr.File(label="第一级程度模型 best.pt", file_types=[".pt"], type="filepath")
+                stage2_model = gr.File(label="第二级程度模型 best.pt", file_types=[".pt"], type="filepath")
+        with gr.Row():
+            image_input = gr.Image(type="filepath", label="上传损伤光斑图")
+            with gr.Column():
+                cascade_level = gr.Textbox(label="级联位置")
+                cascade_conf = gr.Textbox(label="级联位置置信度")
+                severity_bin = gr.Textbox(label="损伤程度分档")
+                severity_conf = gr.Textbox(label="损伤程度置信度")
+                severity_text = gr.Textbox(label="程度说明", lines=2)
+        submit = gr.Button("开始识别", variant="primary")
+        submit.click(
+            fn=predict,
+            inputs=[image_input, cascade_model, stage1_model, stage2_model],
+            outputs=[cascade_level, cascade_conf, severity_bin, severity_conf, severity_text],
+        )
+>>>>>>> 6ed2eb1deaef4a6128758f9b78052bf38af78ac2
     return demo
 
 
@@ -432,9 +478,16 @@ def main() -> None:
         device=args.device,
     )
     demo = build_demo(pipeline)
+<<<<<<< HEAD
     demo.launch(server_name=args.host, server_port=args.port, css=APP_CSS, theme=gr.themes.Soft())
+=======
+    demo.launch(server_name=args.host, server_port=args.port)
+>>>>>>> 6ed2eb1deaef4a6128758f9b78052bf38af78ac2
 
 
 if __name__ == "__main__":
     main()
+<<<<<<< HEAD
 
+=======
+>>>>>>> 6ed2eb1deaef4a6128758f9b78052bf38af78ac2
