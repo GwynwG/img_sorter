@@ -1,0 +1,15 @@
+.venv/
+.ultralytics/
+.vscode/
+__pycache__/
+*.pyc
+
+damage_artifacts/
+output/
+output_check/
+test_images/
+
+模拟图/
+模拟图.zip
+
+app.py
