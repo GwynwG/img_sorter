@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import io
+from datetime import datetime
 from pathlib import Path
 
 import gradio as gr
+import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 
 from .config import SEVERITY_BINS, default_model_paths
@@ -160,6 +164,96 @@ APP_CSS = """
         border-radius: 14px;
     }
 }
+
+/* 批量处理表格样式 */
+.batch-section {
+    border: 1px solid rgba(217, 226, 236, 0.96);
+    border-radius: 16px;
+    background: var(--jg-panel);
+    box-shadow: 0 16px 36px rgba(31, 41, 51, 0.08);
+    padding: 18px;
+    margin-top: 24px;
+}
+
+.batch-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 16px;
+}
+
+.batch-table th {
+    background: linear-gradient(135deg, #e7f7f4, #f0fdfa);
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--jg-ink);
+    border-bottom: 2px solid var(--jg-line);
+}
+
+.batch-table td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--jg-line);
+    vertical-align: middle;
+}
+
+.batch-table tr:hover {
+    background: rgba(240, 253, 250, 0.5);
+}
+
+.thumbnail-cell {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid var(--jg-line);
+}
+
+/* 级联位置标签 */
+.cascade-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.cascade-badge.level-1 {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.cascade-badge.level-2 {
+    background: #fce7f3;
+    color: #9d174d;
+}
+
+/* 进度条样式 */
+.progress-bar-container {
+    width: 100%;
+    height: 24px;
+    background: #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-bar {
+    height: 100%;
+    border-radius: 12px;
+    transition: width 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: white;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.progress-bar.s1 { background: linear-gradient(90deg, #10b981, #34d399); }
+.progress-bar.s2 { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+.progress-bar.s3 { background: linear-gradient(90deg, #f97316, #fb923c); }
+.progress-bar.s4 { background: linear-gradient(90deg, #ef4444, #f87171); }
 """
 
 STAGE_COLORS = {
@@ -297,6 +391,102 @@ def _build_severity_visual(severity_bin: str, cascade_level: str, confidence: fl
     return image
 
 
+def _get_progress_percent(severity_bin: str) -> int:
+    """获取损伤程度对应的进度百分比"""
+    stage_map = {"S1": 25, "S2": 50, "S3": 75, "S4": 100}
+    return stage_map.get(severity_bin, 0)
+
+
+def _image_to_base64_thumbnail(image_path: str, size: tuple = (80, 80)) -> str:
+    """将图片转换为 base64 编码的缩略图"""
+    img = Image.open(image_path)
+    img.thumbnail(size, Image.Resampling.LANCZOS)
+    buffer = io.BytesIO()
+    img.save(buffer, format="JPEG", quality=85)
+    return base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+
+def _build_batch_result_html(results: list[dict]) -> str:
+    """构建批量处理结果的 HTML 表格"""
+    if not results:
+        return '<p style="color: var(--jg-muted); text-align: center;">暂无结果，请上传图片并点击"批量识别"</p>'
+
+    rows = ""
+    for result in results:
+        # 缩略图
+        thumb_b64 = _image_to_base64_thumbnail(result["image_path"])
+        thumb_html = f'<img src="data:image/jpeg;base64,{thumb_b64}" class="thumbnail-cell" />'
+
+        # 级联位置标签
+        cascade_class = "level-1" if result["cascade_level"] == "第一级" else "level-2"
+        cascade_html = f'<span class="cascade-badge {cascade_class}">{result["cascade_level"]}</span>'
+
+        # 进度条
+        severity_bin = result["severity_bin"]
+        progress_pct = _get_progress_percent(severity_bin)
+        progress_class = severity_bin.lower() if severity_bin in ("S1", "S2", "S3", "S4") else ""
+        progress_html = f'''
+        <div class="progress-bar-container">
+            <div class="progress-bar {progress_class}" style="width: {progress_pct}%">
+                {severity_bin} ({progress_pct}%)
+            </div>
+        </div>
+        '''
+
+        rows += f"""
+        <tr>
+            <td>{thumb_html}</td>
+            <td>{cascade_html}</td>
+            <td>{progress_html}</td>
+        </tr>
+        """
+
+    return f"""
+    <table class="batch-table">
+        <thead>
+            <tr>
+                <th style="width: 100px;">缩略图</th>
+                <th style="width: 120px;">基点位置</th>
+                <th>损伤程度</th>
+            </tr>
+        </thead>
+        <tbody>
+            {rows}
+        </tbody>
+    </table>
+    """
+
+
+def _export_to_excel(results: list[dict]) -> str:
+    """将批量处理结果导出为 Excel 文件"""
+    if not results:
+        raise gr.Error("没有可导出的结果")
+
+    data = []
+    for i, result in enumerate(results):
+        data.append({
+            "序号": i + 1,
+            "图片路径": result["image_path"],
+            "图片文件名": Path(result["image_path"]).name,
+            "级联位置": result["cascade_level"],
+            "级联位置置信度": result["cascade_confidence"],
+            "损伤程度": result["severity_bin"],
+            "损伤程度置信度": result["severity_confidence"],
+            "生命周期进度": f"{_get_progress_percent(result['severity_bin'])}%",
+        })
+
+    df = pd.DataFrame(data)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"损伤识别结果_{timestamp}.xlsx"
+    output_path = Path("output") / filename
+    output_path.parent.mkdir(exist_ok=True)
+
+    df.to_excel(output_path, index=False, engine="openpyxl")
+
+    return str(output_path)
+
+
 def build_demo(pipeline: DamagePredictionPipeline) -> gr.Blocks:
     default_paths = {
         "cascade_level": pipeline.cascade_model_path,
@@ -408,6 +598,90 @@ def build_demo(pipeline: DamagePredictionPipeline) -> gr.Blocks:
                 inputs=[image_input, cascade_model, stage1_model, stage2_model],
                 outputs=[cascade_level, cascade_conf, severity_bin, severity_conf, severity_text, stage_visual],
             )
+
+            # 批量处理区域
+            gr.Markdown("")
+            with gr.Column(elem_classes=["batch-section"]):
+                gr.HTML(
+                    """
+                    <div class="panel-heading">
+                        <h2>批量图片处理</h2>
+                        <p>一次上传多张损伤光斑图，系统将自动批量识别并以表格形式展示结果，支持导出为 Excel 文件。</p>
+                    </div>
+                    """
+                )
+                batch_files = gr.File(
+                    label="上传多张图片",
+                    file_count="multiple",
+                    file_types=["image"],
+                    type="filepath",
+                )
+                with gr.Row():
+                    batch_submit = gr.Button("批量识别", variant="primary", elem_id="submit-button")
+                    export_button = gr.Button("导出 Excel", variant="secondary")
+                download_file = gr.File(label="下载 Excel 文件", visible=False)
+                batch_results_html = gr.HTML(
+                    value='<p style="color: var(--jg-muted); text-align: center;">暂无结果，请上传图片并点击"批量识别"</p>'
+                )
+
+            # 批量处理缓存
+            batch_results_cache: list[dict] = []
+
+            def batch_predict(
+                file_list: list[str],
+                cascade_model_path: str | None,
+                stage1_model_path: str | None,
+                stage2_model_path: str | None,
+            ):
+                nonlocal batch_results_cache
+                if not file_list:
+                    raise gr.Error("请先上传至少一张图片")
+
+                active_pipeline = get_pipeline(cascade_model_path, stage1_model_path, stage2_model_path)
+                results = []
+
+                for image_path in file_list:
+                    try:
+                        prediction = active_pipeline.predict(Path(image_path))
+                        results.append({
+                            "image_path": image_path,
+                            "cascade_level": prediction.cascade_level,
+                            "cascade_confidence": prediction.cascade_confidence,
+                            "severity_bin": prediction.severity_bin,
+                            "severity_confidence": prediction.severity_confidence,
+                        })
+                    except Exception as e:
+                        results.append({
+                            "image_path": image_path,
+                            "cascade_level": "识别失败",
+                            "cascade_confidence": 0,
+                            "severity_bin": "N/A",
+                            "severity_confidence": 0,
+                            "error": str(e),
+                        })
+
+                batch_results_cache = results
+                return _build_batch_result_html(results)
+
+            def export_batch_results():
+                nonlocal batch_results_cache
+                if not batch_results_cache:
+                    raise gr.Error("请先进行批量识别")
+                excel_path = _export_to_excel(batch_results_cache)
+                return excel_path
+
+            batch_submit.click(
+                fn=batch_predict,
+                inputs=[batch_files, cascade_model, stage1_model, stage2_model],
+                outputs=[batch_results_html],
+            )
+
+            export_button.click(
+                fn=export_batch_results,
+                inputs=[],
+                outputs=[download_file],
+            )
+
     return demo
 
 
