@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import html
 import io
 from datetime import datetime
 from pathlib import Path
@@ -10,8 +11,11 @@ import gradio as gr
 import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 
-from .config import SEVERITY_BINS, default_model_paths
+from .config import MODEL_SPECS, SEVERITY_BINS, default_model_paths
 from .inference import DamagePredictionPipeline
+from .model_visualization import build_pipeline_graph, summarize_yolo_model
+from .training_artifacts import ModelArtifactSummary, summarize_all_artifacts
+from .training_manager import TRAINING_PRESETS, TrainingManager, TrainingRequest
 
 
 APP_CSS = """
@@ -177,6 +181,8 @@ APP_CSS = """
 
 .batch-table {
     width: 100%;
+    max-width: 100%;
+    table-layout: fixed;
     border-collapse: collapse;
     margin-top: 16px;
 }
@@ -194,6 +200,8 @@ APP_CSS = """
     padding: 10px 16px;
     border-bottom: 1px solid var(--jg-line);
     vertical-align: middle;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .batch-table tr:hover {
@@ -254,6 +262,164 @@ APP_CSS = """
 .progress-bar.s2 { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
 .progress-bar.s3 { background: linear-gradient(90deg, #f97316, #fb923c); }
 .progress-bar.s4 { background: linear-gradient(90deg, #ef4444, #f87171); }
+
+.workbench-panel {
+    border: 1px solid rgba(217, 226, 236, 0.96);
+    border-radius: 16px;
+    background: var(--jg-panel);
+    box-shadow: 0 16px 36px rgba(31, 41, 51, 0.08);
+    padding: 18px;
+}
+
+.artifact-table {
+    width: 100%;
+    max-width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.artifact-table-wrap {
+    width: 100%;
+    max-width: 100%;
+}
+
+.artifact-table th,
+.artifact-table td {
+    border-bottom: 1px solid var(--jg-line);
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.artifact-table th {
+    color: var(--jg-ink);
+    background: #f1f5f9;
+    font-weight: 700;
+}
+
+.artifact-table th:nth-child(1) { width: 15%; }
+.artifact-table th:nth-child(2) { width: 9%; }
+.artifact-table th:nth-child(3) { width: 6%; }
+.artifact-table th:nth-child(4) { width: 8%; }
+.artifact-table th:nth-child(5) { width: 8%; }
+.artifact-table th:nth-child(6) { width: 27%; }
+.artifact-table th:nth-child(7) { width: 27%; }
+
+.path-cell {
+    display: block;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-all;
+    white-space: normal;
+    line-height: 1.45;
+}
+
+.artifact-image-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 18px;
+    align-items: start;
+    margin-top: 16px;
+}
+
+.artifact-image-card {
+    border: 1px solid var(--jg-line);
+    border-radius: 12px;
+    background: #ffffff;
+    padding: 12px;
+    box-shadow: 0 8px 22px rgba(31, 41, 51, 0.06);
+}
+
+.artifact-image-card h3 {
+    margin: 0 0 10px;
+    font-size: 15px;
+    line-height: 1.35;
+}
+
+.artifact-image-card img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-width: 100%;
+    border-radius: 8px;
+    border: 1px solid #edf2f7;
+}
+
+.artifact-image-card p {
+    margin: 8px 0 0;
+    color: var(--jg-muted);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+    word-break: break-all;
+}
+
+.status-pill {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 4px 10px;
+    background: #e0f2fe;
+    color: #075985;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-break: normal;
+}
+
+.structure-flow {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+    align-items: stretch;
+    margin: 12px 0 18px;
+}
+
+.structure-node {
+    border: 1px solid var(--jg-line);
+    border-radius: 12px;
+    background: #ffffff;
+    padding: 12px;
+    min-height: 86px;
+}
+
+.structure-node strong {
+    display: block;
+    margin-bottom: 6px;
+}
+
+.model-card-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.model-card {
+    border: 1px solid var(--jg-line);
+    border-radius: 12px;
+    background: #ffffff;
+    padding: 14px;
+}
+
+.model-card h3 {
+    margin: 0 0 8px;
+    font-size: 16px;
+}
+
+.model-card p {
+    margin: 4px 0;
+    color: var(--jg-muted);
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+    .structure-flow,
+    .model-card-grid {
+        grid-template-columns: 1fr;
+    }
+}
 """
 
 STAGE_COLORS = {
@@ -487,6 +653,177 @@ def _export_to_excel(results: list[dict]) -> str:
     return str(output_path)
 
 
+def _format_optional_percent(value: float | None) -> str:
+    return "暂无" if value is None else f"{value:.2%}"
+
+
+def _format_optional_float(value: float | None) -> str:
+    return "暂无" if value is None else f"{value:.4f}"
+
+
+def _format_path(path: Path | None) -> str:
+    return "未找到" if path is None else html.escape(str(path))
+
+
+def _format_path_cell(path: Path | None) -> str:
+    return f'<span class="path-cell">{_format_path(path)}</span>'
+
+
+def _build_artifact_summary_html(summaries: list[ModelArtifactSummary] | None = None) -> str:
+    summaries = summaries or summarize_all_artifacts()
+    rows = []
+    for summary in summaries:
+        rows.append(
+            f"""
+            <tr>
+                <td><strong>{html.escape(summary.display_name)}</strong><br><span>{html.escape(summary.model_name)}</span></td>
+                <td><span class="status-pill">{html.escape(summary.status)}</span></td>
+                <td>{summary.epoch_count}</td>
+                <td>{_format_optional_percent(summary.top1_accuracy)}</td>
+                <td>{_format_optional_float(summary.val_loss)}</td>
+                <td>{_format_path_cell(summary.best_path)}</td>
+                <td>{_format_path_cell(summary.results_csv)}</td>
+            </tr>
+            """
+        )
+    return f"""
+    <div class="artifact-table-wrap">
+        <table class="artifact-table">
+            <thead>
+                <tr>
+                    <th>模型</th>
+                    <th>状态</th>
+                    <th>轮数</th>
+                    <th>最佳 Top1</th>
+                    <th>最终 Val Loss</th>
+                    <th>best.pt</th>
+                    <th>results.csv</th>
+                </tr>
+            </thead>
+            <tbody>
+                {''.join(rows)}
+            </tbody>
+        </table>
+    </div>
+    """
+
+
+def _image_data_uri(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    mime_type = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
+    return f"data:{mime_type};base64,{base64.b64encode(path.read_bytes()).decode('ascii')}"
+
+
+def _build_artifact_images_html(summaries: list[ModelArtifactSummary] | None = None) -> str:
+    summaries = summaries or summarize_all_artifacts()
+    cards: list[str] = []
+    for summary in summaries:
+        image_specs = (
+            ("训练曲线", summary.results_png),
+            ("混淆矩阵", summary.confusion_matrix),
+            ("归一化混淆矩阵", summary.confusion_matrix_normalized),
+        )
+        for label, path in image_specs:
+            title = f"{summary.display_name} - {label}"
+            if path is None:
+                cards.append(
+                    f"""
+                    <div class="artifact-image-card">
+                        <h3>{html.escape(title)}</h3>
+                        <p>未找到文件</p>
+                    </div>
+                    """
+                )
+                continue
+
+            data_uri = _image_data_uri(path)
+            image_html = (
+                f'<img src="{data_uri}" alt="{html.escape(title)}">'
+                if data_uri
+                else '<p>未找到文件</p>'
+            )
+            cards.append(
+                f"""
+                <div class="artifact-image-card">
+                    <h3>{html.escape(title)}</h3>
+                    {image_html}
+                    <p>{html.escape(str(path))}</p>
+                </div>
+                """
+            )
+
+    if not cards:
+        return '<p style="color: var(--jg-muted);">暂无训练曲线或混淆矩阵。</p>'
+    return f'<div class="artifact-image-grid">{"".join(cards)}</div>'
+
+
+def _build_training_status_html(snapshot) -> str:
+    command = " ".join(snapshot.command) if snapshot.command else "暂无"
+    return f"""
+    <div class="workbench-panel">
+        <p><span class="status-pill">{html.escape(snapshot.state)}</span> {html.escape(snapshot.message)}</p>
+        <p><strong>训练目标：</strong>{html.escape(snapshot.model_target or "暂无")}</p>
+        <p><strong>开始时间：</strong>{html.escape(snapshot.started_at or "暂无")}</p>
+        <p><strong>结束时间：</strong>{html.escape(snapshot.finished_at or "暂无")}</p>
+        <p><strong>日志文件：</strong>{_format_path(snapshot.log_path)}</p>
+        <p><strong>命令：</strong>{html.escape(command)}</p>
+    </div>
+    """
+
+
+def _build_structure_html(model_paths: dict[str, Path]) -> str:
+    graph = build_pipeline_graph()
+    node_html = []
+    for node in graph.nodes:
+        related_edges = [edge for edge in graph.edges if edge.source == node.id]
+        description = " / ".join(edge.label for edge in related_edges) or "最终输出"
+        node_html.append(
+            f"""
+            <div class="structure-node">
+                <strong>{html.escape(node.label)}</strong>
+                <span>{html.escape(description)}</span>
+            </div>
+            """
+        )
+
+    model_cards = []
+    for model_name, spec in MODEL_SPECS.items():
+        summary = summarize_yolo_model(
+            model_name,
+            model_paths[model_name],
+            display_name=str(spec["display_name"]),
+            class_labels=tuple(spec["classes"]),
+        )
+        labels = " / ".join(summary.class_labels) or "暂无"
+        parameter_count = "暂无" if summary.parameter_count is None else f"{summary.parameter_count:,}"
+        layer_count = "暂无" if summary.layer_count is None else str(summary.layer_count)
+        model_cards.append(
+            f"""
+            <div class="model-card">
+                <h3>{html.escape(summary.display_name)}</h3>
+                <p><strong>状态：</strong>{html.escape(summary.message)}</p>
+                <p><strong>路径：</strong>{html.escape(str(summary.model_path))}</p>
+                <p><strong>输入尺寸：</strong>{summary.image_size}</p>
+                <p><strong>类别：</strong>{html.escape(labels)}</p>
+                <p><strong>层/模块数：</strong>{layer_count}</p>
+                <p><strong>参数量：</strong>{parameter_count}</p>
+            </div>
+            """
+        )
+
+    return f"""
+    <div class="workbench-panel">
+        <div class="panel-heading">
+            <h2>三模型两阶段流程</h2>
+            <p>先判断损伤发生位置，再进入对应的程度分类器输出 S1-S4。</p>
+        </div>
+        <div class="structure-flow">{''.join(node_html)}</div>
+        <div class="model-card-grid">{''.join(model_cards)}</div>
+    </div>
+    """
+
+
 def build_demo(pipeline: DamagePredictionPipeline) -> gr.Blocks:
     default_paths = {
         "cascade_level": pipeline.cascade_model_path,
@@ -494,6 +831,7 @@ def build_demo(pipeline: DamagePredictionPipeline) -> gr.Blocks:
         "severity_stage2": pipeline.stage2_model_path,
     }
     pipeline_cache: dict[tuple[str, str, str, str], DamagePredictionPipeline] = {}
+    training_manager = TrainingManager()
 
     def get_pipeline(
         cascade_model_path: str | None,
@@ -564,65 +902,6 @@ def build_demo(pipeline: DamagePredictionPipeline) -> gr.Blocks:
                     cascade_model = gr.File(label="级联位置模型 best.pt", file_types=[".pt"], type="filepath")
                     stage1_model = gr.File(label="第一级程度模型 best.pt", file_types=[".pt"], type="filepath")
                     stage2_model = gr.File(label="第二级程度模型 best.pt", file_types=[".pt"], type="filepath")
-            with gr.Row(elem_classes=["workspace-row"]):
-                with gr.Column(scale=5, elem_classes=["input-panel"]):
-                    gr.HTML(
-                        """
-                        <div class="panel-heading">
-                            <h2>图像输入</h2>
-                            <p>建议上传单张损伤光斑图。画面越接近训练数据中的光斑中心区域，识别结果越容易稳定。</p>
-                        </div>
-                        """
-                    )
-                    image_input = gr.Image(type="filepath", label="上传损伤光斑图", elem_id="image-input", height=390)
-                    submit = gr.Button("开始识别", variant="primary", elem_id="submit-button")
-                with gr.Column(scale=7, elem_classes=["result-panel"]):
-                    gr.HTML(
-                        """
-                        <div class="panel-heading">
-                            <h2>识别结果</h2>
-                            <p>右侧阶段图把 S1-S4 放回 001-121 的模拟序列中，方便快速判断损伤进展位置。</p>
-                        </div>
-                        """
-                    )
-                    stage_visual = gr.Image(label="损伤阶段位置图", elem_id="stage-visual", type="pil", height=330)
-                    with gr.Row():
-                        cascade_level = gr.Textbox(label="级联位置", elem_classes=["compact-output"])
-                        cascade_conf = gr.Textbox(label="级联位置置信度", elem_classes=["compact-output"])
-                    with gr.Row():
-                        severity_bin = gr.Textbox(label="损伤程度分档", elem_classes=["compact-output"])
-                        severity_conf = gr.Textbox(label="损伤程度置信度", elem_classes=["compact-output"])
-                    severity_text = gr.Textbox(label="程度说明", lines=2, elem_classes=["compact-output"])
-            submit.click(
-                fn=predict,
-                inputs=[image_input, cascade_model, stage1_model, stage2_model],
-                outputs=[cascade_level, cascade_conf, severity_bin, severity_conf, severity_text, stage_visual],
-            )
-
-            # 批量处理区域
-            gr.Markdown("")
-            with gr.Column(elem_classes=["batch-section"]):
-                gr.HTML(
-                    """
-                    <div class="panel-heading">
-                        <h2>批量图片处理</h2>
-                        <p>一次上传多张损伤光斑图，系统将自动批量识别并以表格形式展示结果，支持导出为 Excel 文件。</p>
-                    </div>
-                    """
-                )
-                batch_files = gr.File(
-                    label="上传多张图片",
-                    file_count="multiple",
-                    file_types=["image"],
-                    type="filepath",
-                )
-                with gr.Row():
-                    batch_submit = gr.Button("批量识别", variant="primary", elem_id="submit-button")
-                    export_button = gr.Button("导出 Excel", variant="secondary")
-                download_file = gr.File(label="下载 Excel 文件", visible=False)
-                batch_results_html = gr.HTML(
-                    value='<p style="color: var(--jg-muted); text-align: center;">暂无结果，请上传图片并点击"批量识别"</p>'
-                )
 
             # 批量处理缓存
             batch_results_cache: list[dict] = []
@@ -670,17 +949,223 @@ def build_demo(pipeline: DamagePredictionPipeline) -> gr.Blocks:
                 excel_path = _export_to_excel(batch_results_cache)
                 return excel_path
 
-            batch_submit.click(
-                fn=batch_predict,
-                inputs=[batch_files, cascade_model, stage1_model, stage2_model],
-                outputs=[batch_results_html],
-            )
+            def selected_model_paths(
+                cascade_model_path: str | None,
+                stage1_model_path: str | None,
+                stage2_model_path: str | None,
+            ) -> dict[str, Path]:
+                return {
+                    "cascade_level": _select_model_path(cascade_model_path, default_paths["cascade_level"]),
+                    "severity_stage1": _select_model_path(stage1_model_path, default_paths["severity_stage1"]),
+                    "severity_stage2": _select_model_path(stage2_model_path, default_paths["severity_stage2"]),
+                }
 
-            export_button.click(
-                fn=export_batch_results,
-                inputs=[],
-                outputs=[download_file],
-            )
+            def apply_training_preset(preset_name: str):
+                preset = TRAINING_PRESETS[preset_name]
+                return preset["epochs"], preset["imgsz"], preset["batch"], preset["workers"]
+
+            def _number_to_int(value, label: str) -> int:
+                if value is None:
+                    raise gr.Error(f"{label} 不能为空")
+                return int(value)
+
+            def refresh_training_status():
+                snapshot = training_manager.snapshot()
+                return _build_training_status_html(snapshot), training_manager.tail_log(), _build_artifact_summary_html()
+
+            def start_training(
+                model_target: str,
+                epochs,
+                imgsz,
+                batch,
+                device: str,
+                workers,
+                model_source: str | None,
+            ):
+                request = TrainingRequest(
+                    model_target=model_target,
+                    epochs=_number_to_int(epochs, "epochs"),
+                    imgsz=_number_to_int(imgsz, "imgsz"),
+                    batch=_number_to_int(batch, "batch"),
+                    device=device,
+                    workers=_number_to_int(workers, "workers"),
+                    model_source=model_source,
+                )
+                try:
+                    snapshot = training_manager.start_training(request)
+                except Exception as exc:
+                    raise gr.Error(str(exc)) from exc
+                return _build_training_status_html(snapshot), training_manager.tail_log(), _build_artifact_summary_html()
+
+            def refresh_analysis():
+                summaries = summarize_all_artifacts()
+                return _build_artifact_summary_html(summaries), _build_artifact_images_html(summaries)
+
+            def refresh_structure(
+                cascade_model_path: str | None,
+                stage1_model_path: str | None,
+                stage2_model_path: str | None,
+            ):
+                return _build_structure_html(selected_model_paths(cascade_model_path, stage1_model_path, stage2_model_path))
+
+            with gr.Tabs():
+                with gr.Tab("单张识别"):
+                    with gr.Row(elem_classes=["workspace-row"]):
+                        with gr.Column(scale=5, elem_classes=["input-panel"]):
+                            gr.HTML(
+                                """
+                                <div class="panel-heading">
+                                    <h2>图像输入</h2>
+                                    <p>建议上传单张损伤光斑图。画面越接近训练数据中的光斑中心区域，识别结果越容易稳定。</p>
+                                </div>
+                                """
+                            )
+                            image_input = gr.Image(type="filepath", label="上传损伤光斑图", elem_id="image-input", height=390)
+                            submit = gr.Button("开始识别", variant="primary", elem_id="submit-button")
+                        with gr.Column(scale=7, elem_classes=["result-panel"]):
+                            gr.HTML(
+                                """
+                                <div class="panel-heading">
+                                    <h2>识别结果</h2>
+                                    <p>右侧阶段图把 S1-S4 放回 001-121 的模拟序列中，方便快速判断损伤进展位置。</p>
+                                </div>
+                                """
+                            )
+                            stage_visual = gr.Image(label="损伤阶段位置图", elem_id="stage-visual", type="pil", height=330)
+                            with gr.Row():
+                                cascade_level = gr.Textbox(label="级联位置", elem_classes=["compact-output"])
+                                cascade_conf = gr.Textbox(label="级联位置置信度", elem_classes=["compact-output"])
+                            with gr.Row():
+                                severity_bin = gr.Textbox(label="损伤程度分档", elem_classes=["compact-output"])
+                                severity_conf = gr.Textbox(label="损伤程度置信度", elem_classes=["compact-output"])
+                            severity_text = gr.Textbox(label="程度说明", lines=2, elem_classes=["compact-output"])
+                    submit.click(
+                        fn=predict,
+                        inputs=[image_input, cascade_model, stage1_model, stage2_model],
+                        outputs=[cascade_level, cascade_conf, severity_bin, severity_conf, severity_text, stage_visual],
+                    )
+
+                with gr.Tab("批量识别"):
+                    with gr.Column(elem_classes=["batch-section"]):
+                        gr.HTML(
+                            """
+                            <div class="panel-heading">
+                                <h2>批量图片处理</h2>
+                                <p>一次上传多张损伤光斑图，系统将自动批量识别并以表格形式展示结果，支持导出为 Excel 文件。</p>
+                            </div>
+                            """
+                        )
+                        batch_files = gr.File(
+                            label="上传多张图片",
+                            file_count="multiple",
+                            file_types=["image"],
+                            type="filepath",
+                        )
+                        with gr.Row():
+                            batch_submit = gr.Button("批量识别", variant="primary", elem_id="submit-button")
+                            export_button = gr.Button("导出 Excel", variant="secondary")
+                        download_file = gr.File(label="下载 Excel 文件", visible=False)
+                        batch_results_html = gr.HTML(
+                            value='<p style="color: var(--jg-muted); text-align: center;">暂无结果，请上传图片并点击"批量识别"</p>'
+                        )
+                    batch_submit.click(
+                        fn=batch_predict,
+                        inputs=[batch_files, cascade_model, stage1_model, stage2_model],
+                        outputs=[batch_results_html],
+                    )
+                    export_button.click(
+                        fn=export_batch_results,
+                        inputs=[],
+                        outputs=[download_file],
+                    )
+
+                with gr.Tab("训练工作台"):
+                    with gr.Row(elem_classes=["workspace-row"]):
+                        with gr.Column(scale=4, elem_classes=["workbench-panel"]):
+                            gr.HTML(
+                                """
+                                <div class="panel-heading">
+                                    <h2>训练参数</h2>
+                                    <p>从网页启动一次训练任务。训练过程中同一时间只允许一个任务运行。</p>
+                                </div>
+                                """
+                            )
+                            training_target = gr.Dropdown(
+                                label="训练对象",
+                                choices=["全部模型", "级联位置分类器", "第一级损伤程度分类器", "第二级损伤程度分类器"],
+                                value="全部模型",
+                            )
+                            training_preset = gr.Dropdown(
+                                label="参数预设",
+                                choices=list(TRAINING_PRESETS),
+                                value="常规训练",
+                            )
+                            epochs = gr.Number(label="epochs", value=TRAINING_PRESETS["常规训练"]["epochs"], precision=0)
+                            imgsz = gr.Number(label="imgsz", value=TRAINING_PRESETS["常规训练"]["imgsz"], precision=0)
+                            batch = gr.Number(label="batch", value=TRAINING_PRESETS["常规训练"]["batch"], precision=0)
+                            device = gr.Textbox(label="device", value=pipeline.device)
+                            workers = gr.Number(label="workers", value=TRAINING_PRESETS["常规训练"]["workers"], precision=0)
+                            model_source = gr.File(label="可选：分类模型 yaml 或 *-cls.pt", file_types=[".pt", ".yaml", ".yml"], type="filepath")
+                            with gr.Row():
+                                training_start = gr.Button("开始训练", variant="primary", elem_id="submit-button")
+                                training_refresh = gr.Button("刷新状态", variant="secondary")
+                        with gr.Column(scale=8, elem_classes=["workbench-panel"]):
+                            training_status = gr.HTML(value=_build_training_status_html(training_manager.snapshot()))
+                            training_log = gr.Textbox(label="实时日志", lines=14, value="", interactive=False)
+                            training_latest = gr.HTML(value=_build_artifact_summary_html())
+                    training_preset.change(
+                        fn=apply_training_preset,
+                        inputs=[training_preset],
+                        outputs=[epochs, imgsz, batch, workers],
+                    )
+                    training_start.click(
+                        fn=start_training,
+                        inputs=[training_target, epochs, imgsz, batch, device, workers, model_source],
+                        outputs=[training_status, training_log, training_latest],
+                    )
+                    training_refresh.click(
+                        fn=refresh_training_status,
+                        inputs=[],
+                        outputs=[training_status, training_log, training_latest],
+                    )
+
+                with gr.Tab("模型分析"):
+                    with gr.Column(elem_classes=["workbench-panel"]):
+                        gr.HTML(
+                            """
+                            <div class="panel-heading">
+                                <h2>训练结果复盘</h2>
+                                <p>自动读取三套模型的 results.csv、训练摘要和曲线图片。缺失的产物会显示为未找到。</p>
+                            </div>
+                            """
+                        )
+                        analysis_refresh = gr.Button("刷新分析", variant="secondary")
+                        analysis_html = gr.HTML(value=_build_artifact_summary_html())
+                        gr.HTML('<h2 style="margin: 22px 0 4px;">训练曲线与混淆矩阵</h2>')
+                        analysis_images = gr.HTML(value=_build_artifact_images_html())
+                    analysis_refresh.click(
+                        fn=refresh_analysis,
+                        inputs=[],
+                        outputs=[analysis_html, analysis_images],
+                    )
+
+                with gr.Tab("神经网络结构"):
+                    with gr.Column(elem_classes=["workbench-panel"]):
+                        gr.HTML(
+                            """
+                            <div class="panel-heading">
+                                <h2>模型结构可视化</h2>
+                                <p>展示三模型两阶段分类流程，并读取当前模型文件的结构摘要。</p>
+                            </div>
+                            """
+                        )
+                        structure_refresh = gr.Button("刷新结构摘要", variant="secondary")
+                        structure_html = gr.HTML(value=_build_structure_html(default_paths))
+                    structure_refresh.click(
+                        fn=refresh_structure,
+                        inputs=[cascade_model, stage1_model, stage2_model],
+                        outputs=[structure_html],
+                    )
 
     return demo
 
