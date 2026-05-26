@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import unittest
 
+import gradio as gr
 from PIL import Image, ImageChops
 
 from damage_classifier.gradio_app import _build_severity_visual, _severity_sequence_position
+from damage_classifier.inference import DamagePredictionPipeline
 
 
 class GradioAppVisualizationTests(unittest.TestCase):
@@ -24,6 +26,18 @@ class GradioAppVisualizationTests(unittest.TestCase):
         self.assertEqual(image.size, (960, 420))
         blank = Image.new("RGB", image.size, image.getpixel((0, 0)))
         self.assertIsNotNone(ImageChops.difference(image, blank).getbbox())
+
+    def test_build_demo_returns_blocks_without_loading_weights(self):
+        pipeline = DamagePredictionPipeline(
+            cascade_model_path="missing-cascade.pt",
+            stage1_model_path="missing-stage1.pt",
+            stage2_model_path="missing-stage2.pt",
+            device="cpu",
+        )
+
+        demo = __import__("damage_classifier.gradio_app", fromlist=["build_demo"]).build_demo(pipeline)
+
+        self.assertIsInstance(demo, gr.Blocks)
 
 
 if __name__ == "__main__":
