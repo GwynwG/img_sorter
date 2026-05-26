@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-﻿from __future__ import annotations
-=======
 from __future__ import annotations
->>>>>>> 6ed2eb1deaef4a6128758f9b78052bf38af78ac2
 
 import shutil
 import unittest
