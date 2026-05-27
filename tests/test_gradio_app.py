@@ -7,6 +7,7 @@ import gradio as gr
 from PIL import Image, ImageChops
 
 from damage_classifier.gradio_app import (
+    APP_CSS,
     _build_artifact_images_html,
     _build_artifact_summary_html,
     _build_severity_visual,
@@ -45,6 +46,11 @@ class GradioAppVisualizationTests(unittest.TestCase):
         demo = __import__("damage_classifier.gradio_app", fromlist=["build_demo"]).build_demo(pipeline)
 
         self.assertIsInstance(demo, gr.Blocks)
+
+    def test_temporary_screenshot_build_hides_feature_tabs(self):
+        self.assertIn("/* temporary screenshot build: hide feature tabs */", APP_CSS)
+        self.assertIn('#app-shell [role="tablist"]', APP_CSS)
+        self.assertIn("display: none !important;", APP_CSS)
 
     def test_artifact_table_wraps_long_paths(self):
         summary = ModelArtifactSummary(
