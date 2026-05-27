@@ -44,12 +44,6 @@ APP_CSS = """
     padding: 28px 18px 36px;
 }
 
-/* temporary screenshot build: hide feature tabs */
-#app-shell [role="tablist"],
-#app-shell .tab-nav {
-    display: none !important;
-}
-
 .hero-band {
     border: 1px solid rgba(217, 226, 236, 0.88);
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(240, 253, 250, 0.82));

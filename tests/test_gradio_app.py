@@ -47,10 +47,9 @@ class GradioAppVisualizationTests(unittest.TestCase):
 
         self.assertIsInstance(demo, gr.Blocks)
 
-    def test_temporary_screenshot_build_hides_feature_tabs(self):
-        self.assertIn("/* temporary screenshot build: hide feature tabs */", APP_CSS)
-        self.assertIn('#app-shell [role="tablist"]', APP_CSS)
-        self.assertIn("display: none !important;", APP_CSS)
+    def test_restored_build_keeps_feature_tabs_visible(self):
+        self.assertNotIn("/* temporary screenshot build: hide feature tabs */", APP_CSS)
+        self.assertNotIn('#app-shell [role="tablist"]', APP_CSS)
 
     def test_artifact_table_wraps_long_paths(self):
         summary = ModelArtifactSummary(
