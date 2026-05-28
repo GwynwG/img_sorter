@@ -268,45 +268,90 @@ APP_CSS = """
     border-radius: 16px;
     background: var(--jg-panel);
     box-shadow: 0 16px 36px rgba(31, 41, 51, 0.08);
+    padding: 22px;
+}
+
+.workbench-layout,
+.artifact-summary-list,
+.artifact-model-stack {
+    display: grid;
+    gap: 18px;
+}
+
+.training-top-row {
+    align-items: flex-start;
+    gap: 20px;
+}
+
+.artifact-summary-card,
+.artifact-model-block {
+    border: 1px solid var(--jg-line);
+    border-radius: 14px;
+    background: #ffffff;
     padding: 18px;
+    box-shadow: 0 8px 22px rgba(31, 41, 51, 0.06);
 }
 
-.artifact-table {
-    width: 100%;
-    max-width: 100%;
-    table-layout: fixed;
-    border-collapse: collapse;
-    font-size: 13px;
+.artifact-summary-card__head,
+.artifact-model-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 14px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid #eef2f7;
+    padding-bottom: 12px;
+    margin-bottom: 14px;
 }
 
-.artifact-table-wrap {
-    width: 100%;
-    max-width: 100%;
+.artifact-summary-card h3,
+.artifact-model-heading h3 {
+    margin: 0 0 4px;
+    font-size: 16px;
+    line-height: 1.35;
 }
 
-.artifact-table th,
-.artifact-table td {
-    border-bottom: 1px solid var(--jg-line);
-    padding: 10px 12px;
-    text-align: left;
-    vertical-align: top;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+.model-key {
+    color: var(--jg-muted);
+    font-size: 12px;
 }
 
-.artifact-table th {
+.artifact-summary-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(120px, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.metric-item,
+.artifact-path-item {
+    min-width: 0;
+    border: 1px solid #edf2f7;
+    border-radius: 12px;
+    background: #f8fafc;
+    padding: 12px;
+}
+
+.metric-label,
+.path-label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--jg-muted);
+    font-size: 12px;
+}
+
+.metric-value {
     color: var(--jg-ink);
-    background: #f1f5f9;
+    font-size: 16px;
     font-weight: 700;
+    line-height: 1.35;
 }
 
-.artifact-table th:nth-child(1) { width: 15%; }
-.artifact-table th:nth-child(2) { width: 9%; }
-.artifact-table th:nth-child(3) { width: 6%; }
-.artifact-table th:nth-child(4) { width: 8%; }
-.artifact-table th:nth-child(5) { width: 8%; }
-.artifact-table th:nth-child(6) { width: 27%; }
-.artifact-table th:nth-child(7) { width: 27%; }
+.artifact-path-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
 
 .path-cell {
     display: block;
@@ -317,20 +362,23 @@ APP_CSS = """
     line-height: 1.45;
 }
 
-.artifact-image-grid {
+.artifact-curve-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-    gap: 18px;
-    align-items: start;
-    margin-top: 16px;
+    grid-template-columns: minmax(0, 1fr);
+    margin-bottom: 16px;
+}
+
+.artifact-confusion-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
 }
 
 .artifact-image-card {
     border: 1px solid var(--jg-line);
     border-radius: 12px;
     background: #ffffff;
-    padding: 12px;
-    box-shadow: 0 8px 22px rgba(31, 41, 51, 0.06);
+    padding: 14px;
 }
 
 .artifact-image-card h3 {
@@ -359,10 +407,11 @@ APP_CSS = """
 .status-pill {
     display: inline-block;
     border-radius: 999px;
-    padding: 4px 10px;
+    padding: 5px 12px;
     background: #e0f2fe;
     color: #075985;
     font-weight: 700;
+    line-height: 1.35;
     white-space: nowrap;
     overflow-wrap: normal;
     word-break: normal;
@@ -416,7 +465,10 @@ APP_CSS = """
 
 @media (max-width: 900px) {
     .structure-flow,
-    .model-card-grid {
+    .model-card-grid,
+    .artifact-summary-metrics,
+    .artifact-path-grid,
+    .artifact-confusion-row {
         grid-template-columns: 1fr;
     }
 }
@@ -671,41 +723,46 @@ def _format_path_cell(path: Path | None) -> str:
 
 def _build_artifact_summary_html(summaries: list[ModelArtifactSummary] | None = None) -> str:
     summaries = summaries or summarize_all_artifacts()
-    rows = []
+    cards = []
     for summary in summaries:
-        rows.append(
+        cards.append(
             f"""
-            <tr>
-                <td><strong>{html.escape(summary.display_name)}</strong><br><span>{html.escape(summary.model_name)}</span></td>
-                <td><span class="status-pill">{html.escape(summary.status)}</span></td>
-                <td>{summary.epoch_count}</td>
-                <td>{_format_optional_percent(summary.top1_accuracy)}</td>
-                <td>{_format_optional_float(summary.val_loss)}</td>
-                <td>{_format_path_cell(summary.best_path)}</td>
-                <td>{_format_path_cell(summary.results_csv)}</td>
-            </tr>
+            <section class="artifact-summary-card">
+                <div class="artifact-summary-card__head">
+                    <div>
+                        <h3>{html.escape(summary.display_name)}</h3>
+                        <span class="model-key">{html.escape(summary.model_name)}</span>
+                    </div>
+                    <span class="status-pill">{html.escape(summary.status)}</span>
+                </div>
+                <div class="artifact-summary-metrics">
+                    <div class="metric-item">
+                        <span class="metric-label">轮数</span>
+                        <strong class="metric-value">{summary.epoch_count}</strong>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">最佳 Top1</span>
+                        <strong class="metric-value">{_format_optional_percent(summary.top1_accuracy)}</strong>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">最终 Val Loss</span>
+                        <strong class="metric-value">{_format_optional_float(summary.val_loss)}</strong>
+                    </div>
+                </div>
+                <div class="artifact-path-grid">
+                    <div class="artifact-path-item">
+                        <span class="path-label">best.pt</span>
+                        {_format_path_cell(summary.best_path)}
+                    </div>
+                    <div class="artifact-path-item">
+                        <span class="path-label">results.csv</span>
+                        {_format_path_cell(summary.results_csv)}
+                    </div>
+                </div>
+            </section>
             """
         )
-    return f"""
-    <div class="artifact-table-wrap">
-        <table class="artifact-table">
-            <thead>
-                <tr>
-                    <th>模型</th>
-                    <th>状态</th>
-                    <th>轮数</th>
-                    <th>最佳 Top1</th>
-                    <th>最终 Val Loss</th>
-                    <th>best.pt</th>
-                    <th>results.csv</th>
-                </tr>
-            </thead>
-            <tbody>
-                {''.join(rows)}
-            </tbody>
-        </table>
-    </div>
-    """
+    return f'<div class="artifact-summary-list">{"".join(cards)}</div>'
 
 
 def _image_data_uri(path: Path) -> str | None:
@@ -715,47 +772,61 @@ def _image_data_uri(path: Path) -> str | None:
     return f"data:{mime_type};base64,{base64.b64encode(path.read_bytes()).decode('ascii')}"
 
 
+def _build_artifact_image_card(title: str, path: Path | None, modifier: str = "") -> str:
+    classes = f"artifact-image-card {modifier}".strip()
+    if path is None:
+        image_html = "<p>未找到文件</p>"
+        path_html = ""
+    else:
+        data_uri = _image_data_uri(path)
+        image_html = f'<img src="{data_uri}" alt="{html.escape(title)}">' if data_uri else "<p>未找到文件</p>"
+        path_html = f"<p>{html.escape(str(path))}</p>"
+    return f"""
+    <div class="{classes}">
+        <h3>{html.escape(title)}</h3>
+        {image_html}
+        {path_html}
+    </div>
+    """
+
+
 def _build_artifact_images_html(summaries: list[ModelArtifactSummary] | None = None) -> str:
     summaries = summaries or summarize_all_artifacts()
-    cards: list[str] = []
+    blocks: list[str] = []
     for summary in summaries:
-        image_specs = (
-            ("训练曲线", summary.results_png),
-            ("混淆矩阵", summary.confusion_matrix),
-            ("归一化混淆矩阵", summary.confusion_matrix_normalized),
+        curve_card = _build_artifact_image_card(
+            f"{summary.display_name} - 训练曲线",
+            summary.results_png,
+            "artifact-image-card--curve",
         )
-        for label, path in image_specs:
-            title = f"{summary.display_name} - {label}"
-            if path is None:
-                cards.append(
-                    f"""
-                    <div class="artifact-image-card">
-                        <h3>{html.escape(title)}</h3>
-                        <p>未找到文件</p>
+        confusion_card = _build_artifact_image_card(f"{summary.display_name} - 混淆矩阵", summary.confusion_matrix)
+        normalized_card = _build_artifact_image_card(
+            f"{summary.display_name} - 归一化混淆矩阵",
+            summary.confusion_matrix_normalized,
+        )
+        blocks.append(
+            f"""
+            <section class="artifact-model-block">
+                <div class="artifact-model-heading">
+                    <div>
+                        <h3>{html.escape(summary.display_name)}</h3>
+                        <span class="model-key">{html.escape(summary.model_name)}</span>
                     </div>
-                    """
-                )
-                continue
-
-            data_uri = _image_data_uri(path)
-            image_html = (
-                f'<img src="{data_uri}" alt="{html.escape(title)}">'
-                if data_uri
-                else '<p>未找到文件</p>'
-            )
-            cards.append(
-                f"""
-                <div class="artifact-image-card">
-                    <h3>{html.escape(title)}</h3>
-                    {image_html}
-                    <p>{html.escape(str(path))}</p>
                 </div>
-                """
-            )
+                <div class="artifact-curve-row">
+                    {curve_card}
+                </div>
+                <div class="artifact-confusion-row">
+                    {confusion_card}
+                    {normalized_card}
+                </div>
+            </section>
+            """
+        )
 
-    if not cards:
+    if not blocks:
         return '<p style="color: var(--jg-muted);">暂无训练曲线或混淆矩阵。</p>'
-    return f'<div class="artifact-image-grid">{"".join(cards)}</div>'
+    return f'<div class="artifact-model-stack">{"".join(blocks)}</div>'
 
 
 def _build_training_status_html(snapshot) -> str:
@@ -1080,38 +1151,47 @@ def build_demo(pipeline: DamagePredictionPipeline) -> gr.Blocks:
                     )
 
                 with gr.Tab("训练工作台"):
-                    with gr.Row(elem_classes=["workspace-row"]):
-                        with gr.Column(scale=4, elem_classes=["workbench-panel"]):
+                    with gr.Column(elem_classes=["workbench-layout"]):
+                        with gr.Row(elem_classes=["workspace-row", "training-top-row"]):
+                            with gr.Column(scale=5, elem_classes=["workbench-panel"]):
+                                gr.HTML(
+                                    """
+                                    <div class="panel-heading">
+                                        <h2>训练参数</h2>
+                                        <p>从网页启动一次训练任务。训练过程中同一时间只允许一个任务运行。</p>
+                                    </div>
+                                    """
+                                )
+                                training_target = gr.Dropdown(
+                                    label="训练对象",
+                                    choices=["全部模型", "级联位置分类器", "第一级损伤程度分类器", "第二级损伤程度分类器"],
+                                    value="全部模型",
+                                )
+                                training_preset = gr.Dropdown(
+                                    label="参数预设",
+                                    choices=list(TRAINING_PRESETS),
+                                    value="常规训练",
+                                )
+                                epochs = gr.Number(label="epochs", value=TRAINING_PRESETS["常规训练"]["epochs"], precision=0)
+                                imgsz = gr.Number(label="imgsz", value=TRAINING_PRESETS["常规训练"]["imgsz"], precision=0)
+                                batch = gr.Number(label="batch", value=TRAINING_PRESETS["常规训练"]["batch"], precision=0)
+                                device = gr.Textbox(label="device", value=pipeline.device)
+                                workers = gr.Number(label="workers", value=TRAINING_PRESETS["常规训练"]["workers"], precision=0)
+                                model_source = gr.File(label="可选：分类模型 yaml 或 *-cls.pt", file_types=[".pt", ".yaml", ".yml"], type="filepath")
+                                with gr.Row():
+                                    training_start = gr.Button("开始训练", variant="primary", elem_id="submit-button")
+                                    training_refresh = gr.Button("刷新状态", variant="secondary")
+                            with gr.Column(scale=7, elem_classes=["workbench-panel"]):
+                                training_status = gr.HTML(value=_build_training_status_html(training_manager.snapshot()))
+                                training_log = gr.Textbox(label="实时日志", lines=14, value="", interactive=False)
+                        with gr.Column(elem_classes=["workbench-panel", "training-artifacts-panel"]):
                             gr.HTML(
                                 """
                                 <div class="panel-heading">
-                                    <h2>训练参数</h2>
-                                    <p>从网页启动一次训练任务。训练过程中同一时间只允许一个任务运行。</p>
+                                    <h2>训练产物概览</h2>
                                 </div>
                                 """
                             )
-                            training_target = gr.Dropdown(
-                                label="训练对象",
-                                choices=["全部模型", "级联位置分类器", "第一级损伤程度分类器", "第二级损伤程度分类器"],
-                                value="全部模型",
-                            )
-                            training_preset = gr.Dropdown(
-                                label="参数预设",
-                                choices=list(TRAINING_PRESETS),
-                                value="常规训练",
-                            )
-                            epochs = gr.Number(label="epochs", value=TRAINING_PRESETS["常规训练"]["epochs"], precision=0)
-                            imgsz = gr.Number(label="imgsz", value=TRAINING_PRESETS["常规训练"]["imgsz"], precision=0)
-                            batch = gr.Number(label="batch", value=TRAINING_PRESETS["常规训练"]["batch"], precision=0)
-                            device = gr.Textbox(label="device", value=pipeline.device)
-                            workers = gr.Number(label="workers", value=TRAINING_PRESETS["常规训练"]["workers"], precision=0)
-                            model_source = gr.File(label="可选：分类模型 yaml 或 *-cls.pt", file_types=[".pt", ".yaml", ".yml"], type="filepath")
-                            with gr.Row():
-                                training_start = gr.Button("开始训练", variant="primary", elem_id="submit-button")
-                                training_refresh = gr.Button("刷新状态", variant="secondary")
-                        with gr.Column(scale=8, elem_classes=["workbench-panel"]):
-                            training_status = gr.HTML(value=_build_training_status_html(training_manager.snapshot()))
-                            training_log = gr.Textbox(label="实时日志", lines=14, value="", interactive=False)
                             training_latest = gr.HTML(value=_build_artifact_summary_html())
                     training_preset.change(
                         fn=apply_training_preset,

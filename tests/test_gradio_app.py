@@ -51,7 +51,7 @@ class GradioAppVisualizationTests(unittest.TestCase):
         self.assertNotIn("/* temporary screenshot build: hide feature tabs */", APP_CSS)
         self.assertNotIn('#app-shell [role="tablist"]', APP_CSS)
 
-    def test_artifact_table_wraps_long_paths(self):
+    def test_artifact_summary_uses_spacious_cards_for_long_paths(self):
         summary = ModelArtifactSummary(
             model_name="cascade_level",
             display_name="级联位置分类器",
@@ -73,8 +73,13 @@ class GradioAppVisualizationTests(unittest.TestCase):
 
         html = _build_artifact_summary_html([summary])
 
-        self.assertIn('class="artifact-table"', html)
+        self.assertIn('class="artifact-summary-list"', html)
+        self.assertIn('class="artifact-summary-card"', html)
+        self.assertIn('class="artifact-summary-metrics"', html)
+        self.assertIn('class="artifact-path-grid"', html)
+        self.assertIn('class="status-pill"', html)
         self.assertIn('class="path-cell"', html)
+        self.assertNotIn("<table", html)
         self.assertIn(str(Path("D:/project/img_sorter/damage_artifacts/models/cascade_level/best.pt")), html)
 
     def test_artifact_images_render_as_page_flow_html(self):
@@ -99,8 +104,13 @@ class GradioAppVisualizationTests(unittest.TestCase):
 
         html = _build_artifact_images_html([summary])
 
-        self.assertIn('class="artifact-image-grid"', html)
+        self.assertIn('class="artifact-model-stack"', html)
+        self.assertIn('class="artifact-model-block"', html)
+        self.assertIn('class="artifact-curve-row"', html)
+        self.assertIn('class="artifact-confusion-row"', html)
         self.assertIn('class="artifact-image-card"', html)
+        self.assertLess(html.index('class="artifact-curve-row"'), html.index('class="artifact-confusion-row"'))
+        self.assertNotIn('class="artifact-image-grid"', html)
         self.assertNotIn("overflow-y", html)
         self.assertNotIn("height: 460", html)
 
