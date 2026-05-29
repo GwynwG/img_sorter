@@ -1,0 +1,67 @@
+- generic [ref=e4]:
+  - generic [ref=e5]:
+    - img [ref=e9]
+    - paragraph [ref=e20]: 加载中...
+  - generic [ref=e21]:
+    - main [ref=e22]:
+      - generic [ref=e24]:
+        - button "模型选择（不选择则使用默认最新模型） ▼" [ref=e28] [cursor=pointer]:
+          - generic [ref=e29]: 模型选择（不选择则使用默认最新模型）
+          - generic [ref=e30]: ▼
+        - generic [ref=e31]:
+          - generic [ref=e32]:
+            - generic [ref=e33]:
+              - button [ref=e34] [cursor=pointer]: 单张识别
+              - button [ref=e35] [cursor=pointer]: 批量识别
+              - button [ref=e36] [cursor=pointer]: 训练工作台
+              - button [ref=e37] [cursor=pointer]: 模型分析
+              - button [ref=e38] [cursor=pointer]: 神经网络结构
+            - tablist [ref=e39]:
+              - tab "单张识别" [selected] [ref=e40] [cursor=pointer]
+              - tab "批量识别" [ref=e41] [cursor=pointer]
+              - tab "训练工作台" [ref=e42] [cursor=pointer]
+              - tab "模型分析" [ref=e43] [cursor=pointer]
+              - tab "神经网络结构" [ref=e44] [cursor=pointer]
+          - tabpanel [ref=e45]:
+            - generic [ref=e47]:
+              - generic [ref=e48]:
+                - generic [ref=e51]:
+                  - generic:
+                    - generic:
+                      - img
+                    - text: 上传损伤光斑图
+                  - generic [ref=e52]:
+                    - button "将图像文件拖放到此处以上传" [ref=e55] [cursor=pointer]:
+                      - generic [ref=e56]:
+                        - img [ref=e58]
+                        - text: 将图像拖放到此处
+                        - generic [ref=e61]: "- 或 -"
+                        - text: 点击上传
+                    - generic [ref=e62]:
+                      - button "Upload file" [ref=e63] [cursor=pointer]:
+                        - img [ref=e64]
+                      - button "Capture from camera" [ref=e67] [cursor=pointer]:
+                        - img [ref=e68]
+                      - button "Paste from clipboard" [ref=e71] [cursor=pointer]:
+                        - img [ref=e72]
+                - button "开始识别" [ref=e74] [cursor=pointer]
+              - generic [ref=e78]:
+                - generic:
+                  - generic:
+                    - img
+                  - text: 损伤阶段位置图
+                - generic "Empty value" [ref=e79]:
+                  - img [ref=e81]
+    - contentinfo "Gradio footer navigation" [ref=e85]:
+      - button "通过 API 使用 标志" [ref=e86] [cursor=pointer]:
+        - text: 通过 API 使用
+        - img "标志" [ref=e87]
+      - generic [ref=e88]: ·
+      - link "使用 Gradio 构建 标志" [ref=e89] [cursor=pointer]:
+        - /url: https://gradio.app
+        - text: 使用 Gradio 构建
+        - img "标志" [ref=e90]
+      - generic [ref=e91]: ·
+      - button "设置 设置" [ref=e92] [cursor=pointer]:
+        - text: 设置
+        - img "设置" [ref=e93]

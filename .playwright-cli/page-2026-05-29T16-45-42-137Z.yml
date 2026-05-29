@@ -1,0 +1,93 @@
+- generic [ref=e5]:
+  - main [ref=e6]:
+    - generic [ref=e8]:
+      - generic [ref=e12]:
+        - heading "模拟损伤光斑图分级识别" [level=1] [ref=e13]
+        - paragraph [ref=e14]: 上传一张损伤光斑图后，系统会给出级联位置、S1-S4 损伤阶段，并生成一张序列位置图辅助判断。
+        - generic [ref=e15]:
+          - generic [ref=e16]: 1. 上传损伤光斑图
+          - generic [ref=e17]: 2. 识别第一级 / 第二级
+          - generic [ref=e18]: 3. 查看 S1-S4 阶段位置
+      - button "模型选择（不选择则使用默认最新模型） ▼" [ref=e20] [cursor=pointer]:
+        - generic [ref=e21]: 模型选择（不选择则使用默认最新模型）
+        - generic [ref=e22]: ▼
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - generic [ref=e25]:
+            - button [ref=e26] [cursor=pointer]: 单张识别
+            - button [ref=e27] [cursor=pointer]: 批量识别
+            - button [ref=e28] [cursor=pointer]: 训练工作台
+            - button [ref=e29] [cursor=pointer]: 模型分析
+            - button [ref=e30] [cursor=pointer]: 神经网络结构
+          - tablist [ref=e31]:
+            - tab "单张识别" [selected] [ref=e32] [cursor=pointer]
+            - tab "批量识别" [ref=e33] [cursor=pointer]
+            - tab "训练工作台" [ref=e34] [cursor=pointer]
+            - tab "模型分析" [ref=e35] [cursor=pointer]
+            - tab "神经网络结构" [ref=e36] [cursor=pointer]
+        - tabpanel [ref=e37]:
+          - generic [ref=e39]:
+            - generic [ref=e40]:
+              - generic [ref=e44]:
+                - heading "图像输入" [level=2] [ref=e45]
+                - paragraph [ref=e46]: 建议上传单张损伤光斑图。画面越接近训练数据中的光斑中心区域，识别结果越容易稳定。
+              - generic [ref=e47]:
+                - generic:
+                  - generic:
+                    - img
+                  - text: 上传损伤光斑图
+                - generic [ref=e48]:
+                  - button "将图像文件拖放到此处以上传" [ref=e51] [cursor=pointer]:
+                    - generic [ref=e52]:
+                      - img [ref=e54]
+                      - text: 将图像拖放到此处
+                      - generic [ref=e57]: "- 或 -"
+                      - text: 点击上传
+                  - generic [ref=e58]:
+                    - button "Upload file" [ref=e59] [cursor=pointer]:
+                      - img [ref=e60]
+                    - button "Capture from camera" [ref=e63] [cursor=pointer]:
+                      - img [ref=e64]
+                    - button "Paste from clipboard" [ref=e67] [cursor=pointer]:
+                      - img [ref=e68]
+              - button "开始识别" [ref=e70] [cursor=pointer]
+            - generic [ref=e71]:
+              - generic [ref=e75]:
+                - heading "识别结果" [level=2] [ref=e76]
+                - paragraph [ref=e77]: 右侧阶段图把 S1-S4 放回 001-121 的模拟序列中，方便快速判断损伤进展位置。
+              - generic [ref=e78]:
+                - generic:
+                  - generic:
+                    - img
+                  - text: 损伤阶段位置图
+                - generic "Empty value" [ref=e79]:
+                  - img [ref=e81]
+              - generic [ref=e86]:
+                - generic [ref=e88]:
+                  - generic [ref=e89]: 级联位置
+                  - textbox "级联位置" [disabled] [ref=e91]:
+                    - /placeholder: ""
+                - generic [ref=e93]:
+                  - generic [ref=e94]: 级联位置置信度
+                  - textbox "级联位置置信度" [disabled] [ref=e96]:
+                    - /placeholder: ""
+              - generic [ref=e98]:
+                - generic [ref=e100]:
+                  - generic [ref=e101]: 损伤程度分档
+                  - textbox "损伤程度分档" [disabled] [ref=e103]:
+                    - /placeholder: ""
+                - generic [ref=e105]:
+                  - generic [ref=e106]: 损伤程度置信度
+                  - textbox "损伤程度置信度" [disabled] [ref=e108]:
+                    - /placeholder: ""
+              - generic [ref=e111]:
+                - generic [ref=e112]: 程度说明
+                - textbox "程度说明" [disabled] [ref=e114]:
+                  - /placeholder: ""
+  - contentinfo "Gradio footer navigation" [ref=e115]:
+    - generic [ref=e116]: ·
+    - link "使用 Gradio 构建 标志" [ref=e117] [cursor=pointer]:
+      - /url: https://gradio.app
+      - text: 使用 Gradio 构建
+      - img "标志" [ref=e118]
+    - generic [ref=e119]: ·

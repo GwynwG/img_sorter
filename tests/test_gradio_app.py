@@ -11,10 +11,13 @@ from damage_classifier.gradio_app import (
     _build_artifact_images_html,
     _build_artifact_summary_html,
     _build_severity_visual,
+    _build_structure_html,
+    _build_training_status_html,
     _severity_sequence_position,
 )
 from damage_classifier.inference import DamagePredictionPipeline
 from damage_classifier.training_artifacts import ModelArtifactSummary
+from damage_classifier.training_manager import TrainingSnapshot
 
 
 class GradioAppVisualizationTests(unittest.TestCase):
@@ -50,6 +53,40 @@ class GradioAppVisualizationTests(unittest.TestCase):
     def test_restored_build_keeps_feature_tabs_visible(self):
         self.assertNotIn("/* temporary screenshot build: hide feature tabs */", APP_CSS)
         self.assertNotIn('#app-shell [role="tablist"]', APP_CSS)
+
+    def test_delivery_css_hides_gradio_developer_footer_actions(self):
+        self.assertIn("footer .show-api", APP_CSS)
+        self.assertIn("footer .settings", APP_CSS)
+        self.assertIn("display: none !important;", APP_CSS)
+
+    def test_training_status_html_uses_lightweight_status_card(self):
+        snapshot = TrainingSnapshot(
+            state="idle",
+            model_target=None,
+            command=[],
+            log_path=None,
+            returncode=None,
+            message="暂无训练任务",
+            started_at=None,
+            finished_at=None,
+        )
+
+        html = _build_training_status_html(snapshot)
+
+        self.assertIn('class="training-status-card"', html)
+        self.assertNotIn('class="workbench-panel"', html)
+
+    def test_structure_html_does_not_render_nested_workbench_panel(self):
+        html = _build_structure_html(
+            {
+                "cascade_level": Path("missing-cascade.pt"),
+                "severity_stage1": Path("missing-stage1.pt"),
+                "severity_stage2": Path("missing-stage2.pt"),
+            }
+        )
+
+        self.assertIn('class="structure-summary"', html)
+        self.assertNotIn('class="workbench-panel"', html)
 
     def test_artifact_summary_uses_spacious_cards_for_long_paths(self):
         summary = ModelArtifactSummary(

@@ -44,6 +44,11 @@ APP_CSS = """
     padding: 28px 18px 36px;
 }
 
+footer .show-api,
+footer .settings {
+    display: none !important;
+}
+
 .hero-band {
     border: 1px solid rgba(217, 226, 236, 0.88);
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(240, 253, 250, 0.82));
@@ -283,6 +288,49 @@ APP_CSS = """
     gap: 20px;
 }
 
+.training-param-grid {
+    gap: 12px;
+}
+
+.training-status-card,
+.structure-summary {
+    min-width: 0;
+}
+
+.training-status-card {
+    border: 1px solid #edf2f7;
+    border-radius: 14px;
+    background: #f8fafc;
+    padding: 16px;
+}
+
+.training-status-card p {
+    margin: 0;
+}
+
+.training-status-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+
+.training-status-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.training-status-item {
+    min-width: 0;
+}
+
+.training-status-item strong {
+    display: block;
+    margin-bottom: 4px;
+}
+
 .artifact-summary-card,
 .artifact-model-block {
     border: 1px solid var(--jg-line);
@@ -468,7 +516,8 @@ APP_CSS = """
     .model-card-grid,
     .artifact-summary-metrics,
     .artifact-path-grid,
-    .artifact-confusion-row {
+    .artifact-confusion-row,
+    .training-status-grid {
         grid-template-columns: 1fr;
     }
 }
@@ -832,13 +881,33 @@ def _build_artifact_images_html(summaries: list[ModelArtifactSummary] | None = N
 def _build_training_status_html(snapshot) -> str:
     command = " ".join(snapshot.command) if snapshot.command else "暂无"
     return f"""
-    <div class="workbench-panel">
-        <p><span class="status-pill">{html.escape(snapshot.state)}</span> {html.escape(snapshot.message)}</p>
-        <p><strong>训练目标：</strong>{html.escape(snapshot.model_target or "暂无")}</p>
-        <p><strong>开始时间：</strong>{html.escape(snapshot.started_at or "暂无")}</p>
-        <p><strong>结束时间：</strong>{html.escape(snapshot.finished_at or "暂无")}</p>
-        <p><strong>日志文件：</strong>{_format_path(snapshot.log_path)}</p>
-        <p><strong>命令：</strong>{html.escape(command)}</p>
+    <div class="training-status-card">
+        <div class="training-status-head">
+            <span class="status-pill">{html.escape(snapshot.state)}</span>
+            <p>{html.escape(snapshot.message)}</p>
+        </div>
+        <div class="training-status-grid">
+            <div class="training-status-item">
+                <strong>训练目标</strong>
+                <span>{html.escape(snapshot.model_target or "暂无")}</span>
+            </div>
+            <div class="training-status-item">
+                <strong>开始时间</strong>
+                <span>{html.escape(snapshot.started_at or "暂无")}</span>
+            </div>
+            <div class="training-status-item">
+                <strong>结束时间</strong>
+                <span>{html.escape(snapshot.finished_at or "暂无")}</span>
+            </div>
+            <div class="training-status-item">
+                <strong>日志文件</strong>
+                {_format_path_cell(snapshot.log_path)}
+            </div>
+            <div class="training-status-item">
+                <strong>命令</strong>
+                <span class="path-cell">{html.escape(command)}</span>
+            </div>
+        </div>
     </div>
     """
 
@@ -884,7 +953,7 @@ def _build_structure_html(model_paths: dict[str, Path]) -> str:
         )
 
     return f"""
-    <div class="workbench-panel">
+    <div class="structure-summary">
         <div class="panel-heading">
             <h2>三模型两阶段流程</h2>
             <p>先判断损伤发生位置，再进入对应的程度分类器输出 S1-S4。</p>
@@ -1172,10 +1241,12 @@ def build_demo(pipeline: DamagePredictionPipeline) -> gr.Blocks:
                                     choices=list(TRAINING_PRESETS),
                                     value="常规训练",
                                 )
-                                epochs = gr.Number(label="epochs", value=TRAINING_PRESETS["常规训练"]["epochs"], precision=0)
-                                imgsz = gr.Number(label="imgsz", value=TRAINING_PRESETS["常规训练"]["imgsz"], precision=0)
-                                batch = gr.Number(label="batch", value=TRAINING_PRESETS["常规训练"]["batch"], precision=0)
-                                device = gr.Textbox(label="device", value=pipeline.device)
+                                with gr.Row(elem_classes=["training-param-grid"]):
+                                    epochs = gr.Number(label="epochs", value=TRAINING_PRESETS["常规训练"]["epochs"], precision=0)
+                                    imgsz = gr.Number(label="imgsz", value=TRAINING_PRESETS["常规训练"]["imgsz"], precision=0)
+                                with gr.Row(elem_classes=["training-param-grid"]):
+                                    batch = gr.Number(label="batch", value=TRAINING_PRESETS["常规训练"]["batch"], precision=0)
+                                    device = gr.Textbox(label="device", value=pipeline.device)
                                 workers = gr.Number(label="workers", value=TRAINING_PRESETS["常规训练"]["workers"], precision=0)
                                 model_source = gr.File(label="可选：分类模型 yaml 或 *-cls.pt", file_types=[".pt", ".yaml", ".yml"], type="filepath")
                                 with gr.Row():
